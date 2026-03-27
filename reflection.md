@@ -75,8 +75,8 @@ classDiagram
 
 **b. Tradeoffs**
 
-- Describe one tradeoff your scheduler makes.
-- Why is that tradeoff reasonable for this scenario?
+- One tradeoff my scheduler makes is that its time-conflict detection only checks whether two tasks share the exact same due date and due time. It does not yet calculate whether task durations overlap, so a 9:00 task lasting 30 minutes and a 9:15 task lasting 20 minutes would not be flagged as a conflict.
+- I considered making the conflict logic more advanced, but a more complete overlap algorithm would add extra complexity to the data model and the scheduler. For this project, exact-time matching is a reasonable lightweight rule because it is easy to explain, easy to test, and still catches obvious scheduling problems without making the code harder to read.
 
 ---
 
