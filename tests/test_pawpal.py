@@ -18,6 +18,37 @@ def test_mark_complete_sets_task_status_to_true() -> None:
     assert task.completed is True
 
 
+def test_sort_by_time_returns_tasks_in_chronological_order() -> None:
+    scheduler = Scheduler()
+    tasks = [
+        Task(
+            title="Evening walk",
+            category="exercise",
+            duration_minutes=20,
+            priority="medium",
+            due_time="18:00",
+        ),
+        Task(
+            title="Breakfast",
+            category="feeding",
+            duration_minutes=10,
+            priority="high",
+            due_time="07:30",
+        ),
+        Task(
+            title="Medication",
+            category="medication",
+            duration_minutes=5,
+            priority="high",
+            due_time="09:00",
+        ),
+    ]
+
+    sorted_tasks = scheduler.sort_by_time(tasks)
+
+    assert [task.title for task in sorted_tasks] == ["Breakfast", "Medication", "Evening walk"]
+
+
 def test_add_task_increases_pet_task_count() -> None:
     pet = Pet(name="Mochi", species="dog", age=3)
     task = Task(

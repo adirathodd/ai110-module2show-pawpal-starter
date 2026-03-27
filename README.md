@@ -32,6 +32,18 @@ PawPal+ now includes a lightweight scheduling layer that makes the app more usef
 - The scheduler can detect exact time conflicts and return warning messages instead of stopping the program.
 - The daily plan still respects the owner's available time while prioritizing urgent tasks.
 
+## Testing PawPal+
+
+Run the automated tests with:
+
+```bash
+python -m pytest
+```
+
+The test suite covers task completion, task addition, chronological sorting, recurring daily task creation, and duplicate-time conflict warnings.
+
+Confidence Level: 4/5 stars. The core scheduling behaviors are covered and currently passing, but the system still uses a lightweight conflict model and does not yet test every UI interaction or every possible edge case.
+
 ## Getting started
 
 ### Setup
