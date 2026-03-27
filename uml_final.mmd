@@ -1,0 +1,55 @@
+classDiagram
+    class Owner {
+        +name: str
+        +available_time: int
+        +preferences: dict
+        +pets: list[Pet]
+        +add_pet(pet)
+        +update_preferences(preferences)
+        +get_pet(pet_name)
+        +get_all_tasks(include_completed)
+    }
+
+    class Pet {
+        +name: str
+        +species: str
+        +age: int
+        +tasks: list[Task]
+        +add_task(task)
+        +remove_task(task_title)
+        +list_tasks()
+        +pending_tasks()
+        +mark_task_complete(task_title, completion_date)
+    }
+
+    class Task {
+        +title: str
+        +category: str
+        +duration_minutes: int
+        +priority: str
+        +recurrence: str
+        +due_time: str | None
+        +due_date: date
+        +completed: bool
+        +mark_complete(completion_date)
+        +update_details()
+        +is_due_today()
+        +create_next_occurrence(completion_date)
+        +priority_rank()
+    }
+
+    class Scheduler {
+        +generate_daily_plan(owner, pet)
+        +rank_tasks(tasks)
+        +sort_by_time(tasks)
+        +filter_tasks(owner, pet_name, completed)
+        +detect_conflicts(tasks, available_minutes)
+        +detect_time_conflicts(owner, pet)
+    }
+
+    Owner "1" o-- "*" Pet : has
+    Pet "1" o-- "*" Task : includes
+    Pet ..> Task : completes and recreates
+    Scheduler ..> Owner : uses
+    Scheduler ..> Pet : schedules for
+    Scheduler ..> Task : sorts and selects

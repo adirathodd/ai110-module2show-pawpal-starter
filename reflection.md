@@ -20,6 +20,8 @@ classDiagram
         +pets: list[Pet]
         +add_pet(pet)
         +update_preferences(preferences)
+        +get_pet(pet_name)
+        +get_all_tasks(include_completed)
     }
 
     class Pet {
@@ -30,6 +32,8 @@ classDiagram
         +add_task(task)
         +remove_task(task_title)
         +list_tasks()
+        +pending_tasks()
+        +mark_task_complete(task_title, completion_date)
     }
 
     class Task {
@@ -38,21 +42,28 @@ classDiagram
         +duration_minutes: int
         +priority: str
         +recurrence: str
-        +due_time: str
+        +due_time: str | None
+        +due_date: date
         +completed: bool
-        +mark_complete()
+        +mark_complete(completion_date)
         +update_details()
         +is_due_today()
+        +create_next_occurrence(completion_date)
+        +priority_rank()
     }
 
     class Scheduler {
         +generate_daily_plan(owner, pet)
         +rank_tasks(tasks)
+        +sort_by_time(tasks)
+        +filter_tasks(owner, pet_name, completed)
         +detect_conflicts(tasks, available_minutes)
+        +detect_time_conflicts(owner, pet)
     }
 
     Owner "1" o-- "*" Pet : has
     Pet "1" o-- "*" Task : includes
+    Pet ..> Task : completes and recreates
     Scheduler ..> Owner : uses
     Scheduler ..> Pet : schedules for
     Scheduler ..> Task : sorts and selects
@@ -70,8 +81,8 @@ classDiagram
 
 **a. Constraints and priorities**
 
-- What constraints does your scheduler consider (for example: time, priority, preferences)?
-- How did you decide which constraints mattered most?
+- My scheduler considers several constraints: the owner's available time, each task's priority, each task's due date and due time, the task's completion status, and whether the task recurs daily or weekly. It also checks for exact-time conflicts so the system can warn the user when two tasks are scheduled for the same slot.
+- I decided that time availability and task urgency mattered most because those constraints directly affect whether a plan is realistic. If the owner does not have enough time for every task, the scheduler needs to make a clear decision about what should happen first. Due time and priority became the main ranking signals, while recurrence and conflict warnings helped make the schedule more practical and easier to review.
 
 **b. Tradeoffs**
 
@@ -84,13 +95,13 @@ classDiagram
 
 **a. How you used AI**
 
-- How did you use AI tools during this project (for example: design brainstorming, debugging, refactoring)?
-- What kinds of prompts or questions were most helpful?
+- I used VS Code Copilot for several different kinds of work: brainstorming the initial class design, drafting the Mermaid UML, scaffolding class skeletons, suggesting test cases, and reviewing algorithmic improvements for sorting, filtering, recurrence, and conflict detection. It was most effective when I used it as a fast design and implementation partner instead of treating it as an authority.
+- The most effective Copilot features for building the scheduler were Chat for architecture and algorithm planning, inline code suggestions for small method implementations, and test generation for quickly drafting pytest cases. The most helpful prompts were concrete and code-aware, such as asking how the `Scheduler` should retrieve tasks from an `Owner`, how to sort `HH:MM` strings with `sorted()` and a lambda key, or what edge cases matter for recurring tasks and exact-time conflicts.
 
 **b. Judgment and verification**
 
-- Describe one moment where you did not accept an AI suggestion as-is.
-- How did you evaluate or verify what the AI suggested?
+- One example of a suggestion I did not accept as-is was the idea of storing available time separately inside the `Scheduler`. I rejected that because the `Owner` already owned that information, and duplicating it would have created a synchronization problem where the scheduler and the owner could drift apart.
+- I evaluated AI suggestions by comparing them against the class responsibilities I had already defined, then verifying the result with a demo script, pytest, and simple sanity checks in the Streamlit UI. If a suggestion was more compact but made the system harder to understand, I usually kept the clearer version. I also found that using separate chat sessions for different phases helped a lot: one session for design, another for implementation, another for algorithms, and another for testing made it easier to keep context focused and reduced the chance of mixing architectural questions with debugging details.
 
 ---
 
@@ -98,13 +109,12 @@ classDiagram
 
 **a. What you tested**
 
-- What behaviors did you test?
-- Why were these tests important?
+- I tested task completion, task addition, chronological sorting, recurring daily task creation, and exact-time conflict detection. These behaviors were important because they cover the most meaningful parts of the system: changing task state correctly, managing pet task lists, organizing tasks in the right order, automatically generating the next recurring task, and warning the user about obvious scheduling issues.
 
 **b. Confidence**
 
-- How confident are you that your scheduler works correctly?
-- What edge cases would you test next if you had more time?
+- I am moderately confident in the scheduler, around 4 out of 5. The core data model, sorting logic, recurrence behavior, and conflict warnings are all exercised by both the CLI demo and automated tests, so I have good evidence that the main flows work as intended.
+- If I had more time, I would test more edge cases around overlapping durations, tasks with no due time, weekly recurrence over multiple cycles, duplicate task titles on different dates, and Streamlit-specific user interactions such as adding pets and tasks through the UI across multiple reruns.
 
 ---
 
@@ -112,12 +122,22 @@ classDiagram
 
 **a. What went well**
 
-- What part of this project are you most satisfied with?
+- The part I am most satisfied with is the separation between the data model and the scheduling logic. Keeping `Owner`, `Pet`, and `Task` focused on state while letting `Scheduler` handle planning made the system easier to reason about, test, and connect to the UI.
 
 **b. What you would improve**
 
-- If you had another iteration, what would you improve or redesign?
+- In another iteration, I would improve the scheduler by supporting real time-overlap detection based on task duration, more flexible recurrence rules, and a richer explanation system for why tasks were skipped. I would also refine the Streamlit interface so users could edit or complete tasks directly in the app instead of relying mostly on creation and display flows.
 
 **c. Key takeaway**
 
-- What is one important thing you learned about designing systems or working with AI on this project?
+- One important thing I learned is that using AI well still requires a human to act as the lead architect. Copilot was very good at accelerating brainstorming, scaffolding, and test drafting, but I still had to define clean class boundaries, choose reasonable tradeoffs, reject suggestions that introduced unnecessary complexity, and verify that the final system actually matched the design intent.
+
+---
+
+## 6. Prompt Comparison
+
+- For this comparison, I used the same prompt with two different models: OpenAI ChatGPT and Claude. I chose a more complex version of my scheduler problem: rescheduling a weekly recurring task when the original due date has passed and the preferred time slot is already occupied.
+- Shared prompt: "Design a Python solution for rescheduling weekly pet-care tasks. If a weekly task is completed late or its original slot is no longer available, the system should move it to the next valid weekly date and then find the earliest open time slot in the owner's day. Keep the solution modular, readable, and easy to test."
+- Both models produced workable ideas, but the OpenAI response was more modular and more Pythonic. Its solution separated the problem into small helper functions for computing the next weekly date, checking occupied time ranges, and finding the earliest valid opening. That structure matched the way my own `Task`, `Pet`, and `Scheduler` classes are already organized, so it would be easier to integrate without rewriting the rest of the project.
+- The Claude response was still useful, especially for edge cases, but it leaned more toward a single larger block of scheduling logic with more branching in one place. That made the algorithm feel less clean to test in isolation and less consistent with the current codebase's style.
+- I considered the OpenAI version more Pythonic because it relied on clear function boundaries, straightforward `datetime` arithmetic, and readable iteration over candidate time slots instead of packing too many decisions into one loop. In practice, it felt closer to production-quality Python that I could adapt into this project with minimal cleanup.

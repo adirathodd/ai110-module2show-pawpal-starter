@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import json
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import date, timedelta
+from pathlib import Path
 from typing import Any, ClassVar
 
 
@@ -259,6 +261,77 @@ class Owner:
                     tasks.append((pet, task))
         return tasks
 
+    def save_to_json(self, file_path: str | Path) -> None:
+        """Persist the owner, pets, and tasks to a JSON file."""
+        path = Path(file_path)
+        payload = {
+            "name": self.name,
+            "available_time": self.available_time,
+            "preferences": self.preferences,
+            "pets": [self._pet_to_dict(pet) for pet in self.pets],
+        }
+        path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+    @classmethod
+    def load_from_json(cls, file_path: str | Path) -> Owner:
+        """Load an owner and nested pet/task data from a JSON file."""
+        path = Path(file_path)
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        owner = cls(
+            name=payload["name"],
+            available_time=int(payload["available_time"]),
+            preferences=dict(payload.get("preferences", {})),
+        )
+
+        for pet_data in payload.get("pets", []):
+            owner.add_pet(cls._pet_from_dict(pet_data))
+
+        return owner
+
+    @staticmethod
+    def _pet_to_dict(pet: Pet) -> dict[str, Any]:
+        return {
+            "name": pet.name,
+            "species": pet.species,
+            "age": pet.age,
+            "tasks": [Owner._task_to_dict(task) for task in pet.tasks],
+        }
+
+    @staticmethod
+    def _pet_from_dict(payload: dict[str, Any]) -> Pet:
+        return Pet(
+            name=payload["name"],
+            species=payload["species"],
+            age=int(payload["age"]),
+            tasks=[Owner._task_from_dict(task_data) for task_data in payload.get("tasks", [])],
+        )
+
+    @staticmethod
+    def _task_to_dict(task: Task) -> dict[str, Any]:
+        return {
+            "title": task.title,
+            "category": task.category,
+            "duration_minutes": task.duration_minutes,
+            "priority": task.priority,
+            "recurrence": task.recurrence,
+            "due_time": task.due_time,
+            "due_date": task.due_date.isoformat(),
+            "completed": task.completed,
+        }
+
+    @staticmethod
+    def _task_from_dict(payload: dict[str, Any]) -> Task:
+        return Task(
+            title=payload["title"],
+            category=payload["category"],
+            duration_minutes=int(payload["duration_minutes"]),
+            priority=payload["priority"],
+            recurrence=payload.get("recurrence", "once"),
+            due_time=payload.get("due_time"),
+            due_date=payload.get("due_date", date.today().isoformat()),
+            completed=bool(payload.get("completed", False)),
+        )
+
 
 class Scheduler:
     """Task-planning engine for one owner's pets."""
@@ -302,15 +375,8 @@ class Scheduler:
         return sorted(tasks, key=self._task_sort_key)
 
     def sort_by_time(self, tasks: list[Task]) -> list[Task]:
-        """Sort tasks by due time, then priority and title."""
-        return sorted(
-            tasks,
-            key=lambda task: (
-                self._due_time_rank(task.due_time),
-                task.priority_rank(),
-                task.title.lower(),
-            ),
-        )
+        """Sort tasks by priority first, then due time and title."""
+        return self.rank_tasks(tasks)
 
     def filter_tasks(
         self,
@@ -382,6 +448,43 @@ class Scheduler:
 
         return warnings
 
+    def find_next_available_slot(
+        self,
+        owner: Owner,
+        duration_minutes: int,
+        target_date: date | None = None,
+    ) -> str | None:
+        """Find the earliest open time slot that can fit a task on the target date."""
+        if duration_minutes <= 0:
+            raise ValueError("Task duration must be greater than zero.")
+
+        planning_date = target_date or date.today()
+        day_start = Task._normalize_due_time(owner.preferences.get("day_start", "06:00"))
+        day_end = Task._normalize_due_time(owner.preferences.get("day_end", "22:00"))
+        start_minutes = self._due_time_rank(day_start)
+        end_minutes = self._due_time_rank(day_end)
+
+        occupied_slots: list[tuple[int, int]] = []
+        for _, task in owner.get_all_tasks():
+            if task.completed or task.due_date != planning_date or task.due_time is None:
+                continue
+            task_start = self._due_time_rank(task.due_time)
+            task_end = task_start + task.duration_minutes
+            occupied_slots.append((task_start, task_end))
+
+        occupied_slots.sort()
+
+        current_start = start_minutes
+        for task_start, task_end in occupied_slots:
+            if task_start - current_start >= duration_minutes:
+                return self._minutes_to_time(current_start)
+            current_start = max(current_start, task_end)
+
+        if end_minutes - current_start >= duration_minutes:
+            return self._minutes_to_time(current_start)
+
+        return None
+
     def _get_due_tasks(
         self,
         owner: Owner,
@@ -416,6 +519,12 @@ class Scheduler:
 
         hours_text, minutes_text = due_time.split(":", maxsplit=1)
         return int(hours_text) * 60 + int(minutes_text)
+
+    def _minutes_to_time(self, total_minutes: int) -> str:
+        """Convert minutes since midnight into HH:MM format."""
+        hours = total_minutes // 60
+        minutes = total_minutes % 60
+        return f"{hours:02d}:{minutes:02d}"
 
     def _build_explanation(self, pet: Pet, task: Task) -> str:
         """Create a short human-readable explanation for a scheduled task."""
